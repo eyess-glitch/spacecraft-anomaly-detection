@@ -1,2 +1,35 @@
-# spacecraft-anomaly-detection
-This repository contains the source code used for the implementation and training of ATCN neural net for supervised anomaly detection for multivariate time series.
+# 1. Overview 
+Anomaly detection in multivariate time series is a critical task across various scientific and industrial domains, including aerospace, energy, healthcare, and finance. In the context of Earth observation, the ability to detect abnormal behavior within large volumes of satellite sensor data is essential for environmental monitoring, disaster prevention, and data quality assurance. Recently, the European Space Agency (ESA) introduced a new benchmark for anomaly detection in multivariate time series derived from satellite data Bautista et al., 2024. The MTS4EO dataset comprises multivariate time series collected from two different satellite missions (Mission 1 and Mission 2), totaling approximately 14 million rows. Each observation includes around 84 channels, of which 54 channels are designated for anomaly monitoring. These channels represent a wide range of physical parameters acquired by remote sensing instruments, making the dataset both high-dimensional and complex. For more details about the dataset see the [MTS4EO paper (Bautista et al., 2024)](https://arxiv.org/pdf/2406.17826). The dataset itself is available at the [following link already pre-preprocessed](https://www.kaggle.com/competitions/esa-adb-challenge). 
+
+
+# 2. Proposed approach
+The anomaly detection model adopted in this work is based on the architecture presented by Liu et al. in the paper "Spacecraft Anomaly Detection with Attention Temporal Convolution Networks" (arXiv:2303.06879). Unlike traditional models based on LSTMs or Transformer architectures, this approach combines Graph Neural Networks (GNNs) and Temporal Convolutional Networks (TCNs) to effectively capture both temporal and cross-channel dependencies in multivariate time series data. Specifically, the model employs a dynamic graph attention mechanism to learn the intricate correlations between variables (channels) and across time steps. This allows the network to encode both temporal dependencies—how each signal evolves over time—and inter-variable relationships—how different signals influence each other, either synchronously or asynchronously. In this work, the model is used in a forecasting setting, where it predicts future values of the monitored channels based on past observations. The absolute reconstruction error is then computed per channel, comparing the predicted and actual values. These error values are then used as input features for a downstream classifier, which is trained to determine whether a given time step is anomalous. This modular approach—separating feature extraction (via forecasting errors) and anomaly classification—enhances flexibility and allows the anomaly detection system to adapt to various types of multivariate telemetry data. Furthermore, the use of TCNs with dilated causal convolutions and residual connections ensures efficient processing of long sequences in parallel, making the method scalable to large, high-dimensional datasets such as those encountered in Earth observation missions.
+
+
+# 3. Metric used for scoring 
+Submissions are evaluated using the corrected event-wise F0.5 score for anomaly detection in time series, as introduced by Sehili & Zhang and adopted as the primary metric in the ESA-ADB benchmark. The F0.5 score is a harmonic mean of corrected event-wise precision and event-wise recall, where precision is weighted twice as much as recall. An anomalous event is defined as any continuous anomalous segment, regardless of its length. A segment is considered a true positive event (TPₑ) if at least one point within it is detected; otherwise, it counts as a false negative event (FNₑ). Any detected anomaly that does not overlap with a true anomalous segment is counted as a false positive event (FPₑ). Additionally, each falsely detected time point (FPₜ) penalizes the corrected event-wise precision, relative to the number of nominal (non-anomalous) samples (Nₜ). The corrected event-wise precision is computed as: Precisionₑ₍cₒᵣᵣ₎ = (TPₑ / (TPₑ + FPₑ)) × (1 − FPₜ / Nₜ), and the event-wise recall is Recallₑ = TPₑ / (TPₑ + FNₑ). To perform well on this metric, the proposed solution should minimize both event-wise and sample-wise false positives, and produce short and compact detections—detecting even a single point in a segment is sufficient. The metric does not take into account the degree of overlap between detected and true anomalies, nor the timing of the detection within the anomaly window.
+
+# 4. Training
+The forecasting network was trained on the first **30% of the training set**, using only the channels explicitly marked as targets for anomaly detection. Prior to training, a **feature selection phase** based on hierarchical clustering was conducted, which reduced the number of input features to **22**. However, even in this optimized configuration, the anomaly detection metric dropped to **0**. Experiments using both fewer or more features resulted in similar or worse performance. Notably, the distribution of forecasting errors—considering **mean**, **minimum**, and **variance**—differed substantially between the training and test sets, likely due to **overfitting**.
+
+After training the forecasting network, a Random Forest classifier was trained on the absolute errors computed as the difference between the network’s predicted values and the ground truth, using the remaining 70% of the training data. The classifier takes as input the **absolute forecasting errors computed per channel**, using them as features to predict whether a given time step is anomalous. The dataset is highly **imbalanced**, with a class ratio of approximately **8:1** in favor of the non-anomalous class. When trained directly on the imbalanced data, the Random Forest classifier achieved an **F0.5 score close to zero**. However, by applying **undersampling** to the majority class (non-anomalous samples), performance improved significantly.
+
+In addition to Random Forest, other classifiers were evaluated, including **XGBoost**, **Logistic Regression**, and a basic **Multilayer Perceptron (MLP)**. These models, however, performed poorly in comparison to Random Forest. Notably, XGBoost tended to predict a large number of **false positives**, often classifying most test samples as anomalous. Although this behavior could be partially mitigated by increasing the **prediction probability threshold**, the **F0.5 score** remained lower than that of Random Forest.
+
+### Best Hyperparameter Settings
+
+- **Forecasting model**:
+  - **3 layers** for both **GAT** and **TCN** components
+  - **Filter size** of `4`
+  - Fewer layers led to underfitting; more layers did not improve results
+
+- **Random Forest**:
+  - `max_depth = 10`
+  - `n_estimators = 150`
+  - Increasing `max_depth` provided no gains
+  - Increasing `n_estimators` (e.g., to 250) caused the **F0.5 score to drop to 0**
+  - 
+ # 5. Results
+The best combination achieved a score of 0.273, considering that all target channels were used—a task on which other models obtained a score of 0 in terms of the F0.5 score (referencing the baselines from the ESA paper). Higher scores could potentially be achieved by transforming the error into a more meaningful anomaly score, or by training the classifier on a smaller subset of channels.
+
+
