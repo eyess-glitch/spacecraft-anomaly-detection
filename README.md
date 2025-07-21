@@ -28,8 +28,8 @@ In addition to Random Forest, other classifiers were evaluated, including **XGBo
   - `n_estimators = 150`
   - Increasing `max_depth` provided no gains
   - Increasing `n_estimators` (e.g., to 250) caused the **F0.5 score to drop to 0**
-  - 
+  
  # 5. Results
-The best combination achieved a score of 0.273, considering that all target channels were used—a task on which other models obtained a score of 0 in terms of the F0.5 score (referencing the baselines from the ESA paper). Higher scores could potentially be achieved by transforming the error into a more meaningful anomaly score, or by training the classifier on a smaller subset of channels.
+The best combination achieved a score of 0.273, considering that all target channels were used—a task on which other models obtained a score of 0 in terms of the F0.5 score (referencing the baselines from the ESA paper). Higher scores could potentially be achieved by transforming the error into a more meaningful anomaly score, or by training the classifier on a smaller subset of channels. Additionally, besides the errors, more features could be added as input to the classifier—for example, features from the frequency domain obtained via the Fourier transform as mentioned by [Sara Cuellar et al](https://www.sciencedirect.com/science/article/pii/S0952197624002410) . However, this would double the number of features if the Short-Time Fourier Transform is calculated for each individual channel, so feature selection would be necessary.
 
 
